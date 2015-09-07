@@ -102,8 +102,9 @@ class AttachmentBehavior extends Behavior
             $attachment->size = 0; //@filesize($sourcePath);
             $attachment->basename = '';
             $attachment->ext = '';
+
             if ($config['dataUrl']) {
-                $attachment->url = $config['dataUrl'] . $fileName;
+                $attachment->url = rtrim($config['dataUrl'], '/') . '/' . $fileName;
             }
 
             return $attachment;

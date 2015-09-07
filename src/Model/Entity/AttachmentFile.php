@@ -21,11 +21,11 @@ class AttachmentFile extends Entity
         $file = new File($filePath, false);
 
         $entity = new self();
-        $entity->set('is_import', true);
-        $entity->set('import_source', $filePath);
+        //$entity->set('is_import', true);
+        //$entity->set('import_source', $filePath);
 
         $entity->set('name', $file->name());
-        $entity->set('source', null);
+        $entity->set('source', $filePath);
         $entity->set('basename', $file->info()['basename']);
         $entity->set('ext', $file->ext());
 
