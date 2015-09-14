@@ -4,10 +4,10 @@ namespace Attachment\Test\Fixture;
 use Cake\TestSuite\Fixture\TestFixture;
 
 /**
- * AttachmentFilesFixture
+ * AttachmentTestsFixture
  *
  */
-class AttachmentFilesFixture extends TestFixture
+class AttachmentTestsFixture extends TestFixture
 {
 
     /**

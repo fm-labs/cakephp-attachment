@@ -15,7 +15,7 @@ class AttachmentBehaviorTest extends AttachmentPluginTestCase
      * @var array
      */
     public $fixtures = [
-        'plugin.attachment.attachment_files'
+        'plugin.attachment.attachment_tests'
     ];
 
     /**
@@ -32,11 +32,11 @@ class AttachmentBehaviorTest extends AttachmentPluginTestCase
     {
         parent::setUp();
 
-        $this->table = TableRegistry::get('AttachmentFiles');
+        $this->table = TableRegistry::get('AttachmentTests');
         $this->table->primaryKey(['id']);
         $this->table->entityClass('\\Attachment\\Test\\TestCase\\Model\\Entity\\ExampleEntity');
         $this->table->addBehavior('Attachment.Attachment', [
-            'storageDir' => static::$attachmentsDir,
+            'dataDir' => static::$attachmentsDir,
             'fields' => [
                 'file' => [
 
@@ -55,24 +55,24 @@ class AttachmentBehaviorTest extends AttachmentPluginTestCase
         TableRegistry::clear();
     }
 
-    public function _testTestSetup()
+    public function testTestSetup()
     {
         $this->assertTrue(is_file($this->getTestFilePath('attachment01.txt')));
         $this->assertEquals('Test', $this->getTestFileContents('attachment01.txt'));
     }
 
-    public function _testGetEntityWithAttachmentFile()
+    public function testGetEntityWithInlineAttachmentFile()
     {
         $entity = $this->table->get(1);
 
         $this->assertArrayHasKey('file', $entity);
         $this->assertInstanceOf('\\Attachment\\Model\\Entity\\AttachmentFile', $entity['file']);
 
-        $this->assertEquals((string)$entity['file'], $entity['file']['source']);
-        $this->assertEquals((string)$entity->file, $entity['file']->source);
+        //$this->assertEquals((string)$entity['file'], $entity['file']['source']);
+        //$this->assertEquals((string)$entity->file, $entity['file']->source);
     }
 
-    public function _testGetEntityWithMultipleAttachmentFiles()
+    public function testGetEntityWithMultipleInlineAttachmentFiles()
     {
         $entity = $this->table->get(4);
 
@@ -85,11 +85,13 @@ class AttachmentBehaviorTest extends AttachmentPluginTestCase
 
     }
 
-    public function testCreateEntityWithAttachmentFile()
+    public function testCreateEntityWithInlineAttachmentFile()
     {
+        $filePath = 'attachment03.txt';
+
         $entity = $this->table->newEntity();
         $entity->title = 'Test Create';
-        //$entity->file = AttachmentFile::import($this->getTestFilePath('attachment03.txt'));
+        $entity->file = $filePath;
 
         if ($entity->errors()) {
             debug($entity->errors());
@@ -100,9 +102,9 @@ class AttachmentBehaviorTest extends AttachmentPluginTestCase
 
         // @todo clear cache
 
-        //$entity = $this->table->get($entity['id']);
+        $entity = $this->table->get($entity['id']);
         //debug($entity);
-        //$this->assertEquals('attachment03.txt', (string) $entity['file']);
+        $this->assertEquals($filePath, (string) $entity['file']);
     }
 
 }

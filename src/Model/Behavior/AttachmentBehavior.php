@@ -2,13 +2,18 @@
 namespace Attachment\Model\Behavior;
 
 use ArrayObject;
+use Attachment\Model\Entity\Attachment;
 use Attachment\Model\Entity\AttachmentFile;
+use Attachment\Model\Table\AttachmentsTable;
+use Attachment\Model\Table\AttachmentsTableInterface;
 use Cake\Collection\Iterator\MapReduce;
 use Cake\Event\Event;
 use Cake\Log\Log;
 use Cake\ORM\Behavior;
 use Cake\ORM\Entity;
 use Cake\ORM\Query;
+use Cake\ORM\Table;
+use Cake\ORM\TableRegistry;
 use Cake\Validation\Validator;
 use Upload\Exception\UploadException;
 use Upload\Uploader;
@@ -22,8 +27,11 @@ class AttachmentBehavior extends Behavior
     ];
 
     protected $_defaultFieldConfig = [
+        'inline' => true,
+        // Attachments table class
+        'attachmentsTable' => 'Attachment.Attachments',
         // Attachment file class
-        'attachmentClass' => '\\Attachment\\Model\\Entity\\AttachmentFile',
+        'fileClass' => '\\Attachment\\Model\\Entity\\AttachmentFile',
         // Upload config or config name
         'uploadConfig' => false,
         // Allow multiple files
@@ -53,6 +61,50 @@ class AttachmentBehavior extends Behavior
         }
     }
 
+    public function findAttachment(Query $query, array $options)
+    {
+        if (!isset($options['field']) || !isset($options['id'])) {
+            debug("findAttachment() option 'field' or 'id' missing");
+            return $query;
+        }
+
+        $Attachments = $this->_getAttachmentsModel($options['field']);
+        return $Attachments->find()->where([
+            'model' => $this->_table->alias,
+            'modelid' => $options['id'],
+            'scope' => $options['field'],
+        ]);
+    }
+
+    public function attachFile($entity, $fieldName, $path, $attachmentData = [])
+    {
+        //$config = $this->_fields[$field];
+        $Attachments = $this->_getAttachmentsModel($fieldName);
+
+        $_data = [
+            'model' => $this->_table->alias,
+            'modelid' => $entity->id,
+            'scope' => null,
+            'type' => null,
+            'title' => basename($path),
+            'desc' => null,
+        ];
+        $_data = array_merge($_data, $attachmentData);
+        $attachment = $Attachments->newEntity($_data);
+
+        // create entity from arguments
+        return $this->_getAttachmentsModel($fieldName)->saveAttachment($attachment);
+    }
+
+    /**
+     * @param $field
+     * @return AttachmentsTable
+     */
+    protected function _getAttachmentsModel($field)
+    {
+        return TableRegistry::get($this->_fields[$field]['attachmentsTable']);
+    }
+
     /**
      * 'beforeFind' callback
      *
@@ -70,8 +122,10 @@ class AttachmentBehavior extends Behavior
         $mapper = function ($row, $key, MapReduce $mapReduce) {
 
             foreach ($this->_fields as $fieldName => $field) {
-                if (isset($row[$fieldName]) && !empty($row[$fieldName])) {
-                    $row[$fieldName] = $this->_resolveAttachment($row[$fieldName], $field);
+                if ($field['inline'] === true && isset($row[$fieldName]) && !empty($row[$fieldName])) {
+                    $row[$fieldName] = $this->_resolveInlineAttachment($row[$fieldName], $field);
+                } else {
+                    //$row[$fieldName] = $this->_resolveDbAttachment($fieldName, $field);
                 }
             }
 
@@ -86,42 +140,52 @@ class AttachmentBehavior extends Behavior
     }
 
     /**
-     * @param $fileName
-     * @param $field
+     * @param string $filePath Relative file path to configured dataDir
+     * @param array $field Field config
      * @return array|AttachmentFile
      */
-    protected function _resolveAttachment($fileName, $field)
+    protected function _resolveInlineAttachment($filePath, $field)
     {
+        //debug("resolve inline attachment " . $this->_table->alias() . ":" . $filePath);
         $config =& $this->_config;
-        $resolver = function ($fileName) use ($field, $config) {
-            $sourcePath = $config['dataDir'] . $fileName;
 
-            $attachment = new $field['attachmentClass']();
-            $attachment->name = $fileName;
+        // Resolve Inline Attachment
+        $resolver = function ($filePath) use ($field, $config) {
+            $sourcePath = $config['dataDir'] . $filePath;
+
+            $attachment = new $field['fileClass']();
+            $attachment->name = $filePath;
             $attachment->source = $sourcePath;
             $attachment->size = 0; //@filesize($sourcePath);
             $attachment->basename = '';
             $attachment->ext = '';
 
             if ($config['dataUrl']) {
-                $attachment->url = rtrim($config['dataUrl'], '/') . '/' . $fileName;
+                $attachment->url = rtrim($config['dataUrl'], '/') . '/' . $filePath;
             }
 
             return $attachment;
         };
 
+
         if ($field['multiple']) {
-            $files = explode(',', $fileName);
+            $files = explode(',', $filePath);
             $attachments = [];
-            foreach ($files as $fileName) {
-                $attachments[] = $resolver($fileName);
+            foreach ($files as $_filePath) {
+                $attachments[] = $resolver($_filePath);
             }
             return $attachments;
 
         } else {
-            return $resolver($fileName);
+            return $resolver($filePath);
         }
 
+    }
+
+    protected function _resolveDbAttachment($fieldName, $field)
+    {
+        $Model = $this->_getAttachmentsModel($fieldName);
+        debug("Resolving db attachments for field " . $fieldName);
     }
 
     public function buildValidator(Event $event, Validator $validator, $name)
