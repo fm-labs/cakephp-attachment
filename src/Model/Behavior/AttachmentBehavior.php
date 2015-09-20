@@ -70,7 +70,7 @@ class AttachmentBehavior extends Behavior
 
         $Attachments = $this->_getAttachmentsModel($options['field']);
         return $Attachments->find()->where([
-            'model' => $this->_table->alias,
+            'model' => $this->_table->alias(),
             'modelid' => $options['id'],
             'scope' => $options['field'],
         ]);
@@ -82,7 +82,7 @@ class AttachmentBehavior extends Behavior
         $Attachments = $this->_getAttachmentsModel($fieldName);
 
         $_data = [
-            'model' => $this->_table->alias,
+            'model' => $this->_table->alias(),
             'modelid' => $entity->id,
             'scope' => null,
             'type' => null,
@@ -125,7 +125,7 @@ class AttachmentBehavior extends Behavior
                 if ($field['inline'] === true && isset($row[$fieldName]) && !empty($row[$fieldName])) {
                     $row[$fieldName] = $this->_resolveInlineAttachment($row[$fieldName], $field);
                 } else {
-                    //$row[$fieldName] = $this->_resolveDbAttachment($fieldName, $field);
+                    $row[$fieldName] = $this->_resolveDbAttachment($row, $fieldName, $field);
                 }
             }
 
@@ -149,32 +149,35 @@ class AttachmentBehavior extends Behavior
         //debug("resolve inline attachment " . $this->_table->alias() . ":" . $filePath);
         $config =& $this->_config;
 
+        //@TODO Keep it dry (possible duplicate in '_resolveDbAttachment' method)
+        //@TODO Refactor resolver with Attachment entity as fileClass / file interface
+        //@TODO Extract file extension
         // Resolve Inline Attachment
         $resolver = function ($filePath) use ($field, $config) {
             $sourcePath = $config['dataDir'] . $filePath;
 
-            $attachment = new $field['fileClass']();
-            $attachment->name = $filePath;
-            $attachment->source = $sourcePath;
-            $attachment->size = 0; //@filesize($sourcePath);
-            $attachment->basename = '';
-            $attachment->ext = '';
+            $file = new $field['fileClass']();
+            $file->name = $filePath;
+            $file->source = $sourcePath;
+            $file->size = (int) @filesize($sourcePath);
+            $file->basename = basename($filePath);
+            $file->ext = null;
 
             if ($config['dataUrl']) {
-                $attachment->url = rtrim($config['dataUrl'], '/') . '/' . $filePath;
+                $file->url = rtrim($config['dataUrl'], '/') . '/' . $filePath;
             }
 
-            return $attachment;
+            return $file;
         };
 
 
         if ($field['multiple']) {
-            $files = explode(',', $filePath);
-            $attachments = [];
-            foreach ($files as $_filePath) {
-                $attachments[] = $resolver($_filePath);
+            $paths = explode(',', $filePath);
+            $files = [];
+            foreach ($paths as $_filePath) {
+                $files[] = $resolver($_filePath);
             }
-            return $attachments;
+            return $files;
 
         } else {
             return $resolver($filePath);
@@ -182,10 +185,55 @@ class AttachmentBehavior extends Behavior
 
     }
 
-    protected function _resolveDbAttachment($fieldName, $field)
+    protected function _resolveDbAttachment($row, $fieldName, $field)
     {
-        $Model = $this->_getAttachmentsModel($fieldName);
-        debug("Resolving db attachments for field " . $fieldName);
+        //debug("Resolving db attachments for field " . $fieldName);
+        $Attachments = $this->_getAttachmentsModel($fieldName);
+        $params = [
+            'model' => $this->_table->alias(),
+            'modelid' => $row->id,
+            'scope' => $fieldName,
+        ];
+        $query = $Attachments->find()->where($params);
+
+        //@TODO Keep it dry (possible duplicate in '_resolveInlineAttachment' method)
+        //@TODO Extract file extension
+        // Resolve DB Attachment
+        $config =& $this->_config;
+        $resolver = function ($attachment) use ($field, $config) {
+            if ($attachment === null) {
+                return;
+            }
+
+            $filePath = $attachment->filepath;
+            $sourcePath = $config['dataDir'] . $filePath;
+
+            $file = new $field['fileClass']();
+            $file->name = $filePath;
+            $file->source = $sourcePath;
+            $file->size = $attachment->filesize;
+            $file->basename = $attachment->filename;
+            $file->ext = null;
+            $file->desc = $attachment->desc_text;
+
+            if ($config['dataUrl']) {
+                $file->url = rtrim($config['dataUrl'], '/') . '/' . $filePath;
+            }
+
+            return $file;
+        };
+
+        if ($field['multiple']) {
+            $attachments = $query->all();
+            $files = [];
+            foreach ($attachments as $attachment) {
+                $files[] = $resolver($attachment);
+            }
+            return $files;
+        } else {
+            $attachment = $query->first();
+            return $resolver($attachment);
+        }
     }
 
     public function buildValidator(Event $event, Validator $validator, $name)

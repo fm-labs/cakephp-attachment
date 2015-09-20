@@ -72,7 +72,7 @@ class AttachmentsTable extends Table
             ->allowEmpty('title');
 
         $validator
-            ->allowEmpty('desc');
+            ->allowEmpty('desc_text');
 
         $validator
             ->allowEmpty('mimetype');
