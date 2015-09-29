@@ -32,7 +32,14 @@ class AttachmentsTable extends Table
         $this->primaryKey('id');
 
         $this->addBehavior('Timestamp');
+    }
 
+    public function enableI18n()
+    {
+        $this->addBehavior('Translate', [
+            'fields' => ['title', 'desc_text'],
+            'translationTable' => 'AttachmentsI18n'
+        ]);
     }
 
     /**

@@ -28,7 +28,7 @@ class AttachmentBehavior extends Behavior
 
     protected $_defaultFieldConfig = [
         'inline' => true,
-        // Attachments table class
+        // Attachments table class. Defaults to 'Attachment.Attachments'
         'attachmentsTable' => 'Attachment.Attachments',
         // Attachment file class
         'fileClass' => '\\Attachment\\Model\\Entity\\AttachmentFile',
@@ -36,6 +36,8 @@ class AttachmentBehavior extends Behavior
         'uploadConfig' => false,
         // Allow multiple files
         'multiple' => false,
+        // Use i18n mode (sets 'attachmentTable' to 'Attachment.I18nAttachments' if not set)
+        'i18n' => false,
         // Remove file on delete,
         //'removeOnDelete' => true,
     ];
@@ -57,6 +59,18 @@ class AttachmentBehavior extends Behavior
     {
         foreach ($this->_config['fields'] as $field => $_config) {
             $_config = array_merge($this->_defaultFieldConfig, $_config);
+
+            /*
+            // configure db attachments
+            if ($_config['inline'] !== true) {
+                // auto-configure attachmentsTable, if null
+                if ($_config['attachmentsTable'] === null) {
+                    $_config['attachmentsTable'] = ($_config['i18n'] === true)
+                        ? 'Attachment.I18nAttachments' : 'Attachment.Attachments';
+                }
+            }
+            */
+
             $this->_fields[$field] = $_config;
         }
     }
@@ -70,9 +84,9 @@ class AttachmentBehavior extends Behavior
 
         $Attachments = $this->_getAttachmentsModel($options['field']);
         return $Attachments->find()->where([
-            'model' => $this->_table->alias(),
-            'modelid' => $options['id'],
-            'scope' => $options['field'],
+            'Attachments.model' => $this->_table->alias(),
+            'Attachments.modelid' => $options['id'],
+            'Attachments.scope' => $options['field'],
         ]);
     }
 
@@ -93,7 +107,7 @@ class AttachmentBehavior extends Behavior
         $attachment = $Attachments->newEntity($_data);
 
         // create entity from arguments
-        return $this->_getAttachmentsModel($fieldName)->saveAttachment($attachment);
+        return $Attachments->saveAttachment($attachment);
     }
 
     /**
@@ -102,7 +116,13 @@ class AttachmentBehavior extends Behavior
      */
     protected function _getAttachmentsModel($field)
     {
-        return TableRegistry::get($this->_fields[$field]['attachmentsTable']);
+        $Model = TableRegistry::get($this->_fields[$field]['attachmentsTable']);
+        if ($this->_fields[$field]['i18n'] && $this->_table && $this->_table->hasBehavior('Translate')) {
+            $parentLocale = $this->_table->locale();
+            $Model->enableI18n();
+            $Model->locale($parentLocale);
+        }
+        return $Model;
     }
 
     /**
@@ -190,9 +210,9 @@ class AttachmentBehavior extends Behavior
         //debug("Resolving db attachments for field " . $fieldName);
         $Attachments = $this->_getAttachmentsModel($fieldName);
         $params = [
-            'model' => $this->_table->alias(),
-            'modelid' => $row->id,
-            'scope' => $fieldName,
+            'Attachments.model' => $this->_table->alias(),
+            'Attachments.modelid' => $row->id,
+            'Attachments.scope' => $fieldName,
         ];
         $query = $Attachments->find()->where($params);
 
