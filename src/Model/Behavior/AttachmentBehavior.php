@@ -176,6 +176,10 @@ class AttachmentBehavior extends Behavior
         $resolver = function ($filePath) use ($field, $config) {
             $sourcePath = $config['dataDir'] . $filePath;
 
+            if (!is_file($sourcePath)) {
+                return;
+            }
+
             $file = new $field['fileClass']();
             $file->name = $filePath;
             $file->source = $sourcePath;
